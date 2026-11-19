@@ -80,4 +80,5 @@ def matplotlib_rc(tema: Tema) -> dict:
         "lines.linewidth": 2.0,
         "legend.frameon": False,
         "savefig.transparent": True,
+        "svg.hashsalt": "lamina",  # stable ids: the same command gives the same file
     }

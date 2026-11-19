@@ -192,7 +192,8 @@ def figura_svg(fig) -> Pieza:
     """A matplotlib figure as a piece (text already as paths through the rc)."""
     import matplotlib.pyplot as plt
     buf = io.StringIO()
-    fig.savefig(buf, format="svg", bbox_inches="tight", pad_inches=0.06)
+    fig.savefig(buf, format="svg", bbox_inches="tight", pad_inches=0.06,
+                metadata={"Date": None, "Creator": None, "Format": None, "Type": None})
     plt.close(fig)
     return desde_svg(buf.getvalue())
 

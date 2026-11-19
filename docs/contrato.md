@@ -8,8 +8,10 @@ Lámina writes it; cerebro-app (and Obsidian) render it. Both sides test against
 ## Where
 
 `UTN/<Materia>/pizarrón/Pizarrón — <YYYY-MM-DD>.md` in the vault, one note per study day.
-The SVGs go next to it as `lamina-<hash>.svg` (the hash is unique, so names never collide in
-the vault). Lámina never overwrites: it only appends.
+The SVGs go next to it as `lamina-<hash>.svg`, where the hash is the SHA-256 of the recorded
+command: the same command always gives the same name and the same file. That is what lets a
+cloud session upload only the note's text and the PC draw the missing SVGs later
+(`lamina completar`). Lámina never overwrites a note: it only appends.
 
 ## Format
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import re
 import shlex
 import sys
@@ -17,7 +18,6 @@ from . import hoja
 from .estilo import TEMAS
 from .lienzo import Pieza, clave, en_cache, formula, guardar, tarjeta
 
-TIPOS = ("formula", "polos", "bode", "curva", "escalera", "bloques", "hoja")
 
 
 def _comunes(p: argparse.ArgumentParser) -> None:
@@ -82,6 +82,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--a", help="1 a1 a2 ... (denominador en z^-k); sin --a es FIR")
     _comunes(p)
 
+    p = sub.add_parser("completar", help="dibujar los SVG que le faltan a notas del pizarrón")
+    p.add_argument("rutas", nargs="+", help="notas o carpetas")
+
     p = sub.add_parser("hoja", help="hoja completa en Markdown con @dibujos (de un archivo o de stdin)")
     p.add_argument("archivo", nargs="?", default="-")
     _comunes(p)
@@ -136,7 +139,7 @@ def dibujar_hoja(fuente: str, claro: bool) -> tuple[str, list[tuple[str, str]]]:
     def dibujar(linea: str) -> Pieza:
         argv = hoja.separar_dibujo(linea)[0]
         p = _dibujar(_subparser_args(argv, claro))[0]
-        sueltos.append((shlex.join(argv), tarjeta([p], tema)))
+        sueltos.append((shlex.join(argv + (["--claro"] if claro else [])), tarjeta([p], tema)))
         return p
 
     titulo, pzs = hoja.piezas(hoja.leer(fuente), tema, dibujar)
@@ -168,9 +171,48 @@ def _rangos_negativos(argv: list[str]) -> list[str]:
     return out
 
 
-def _svg_al_lado(nota: Path, svg: str, nombre: str) -> str:
+def _sin_salida(argv: list[str]) -> list[str]:
+    """The command as it is recorded in the note: without where its files went."""
+    out, saltar = [], False
+    for a in argv:
+        if saltar:
+            saltar = False
+        elif a in ("--pizarron", "-o", "--salida"):
+            saltar = True
+        elif not a.startswith(("--pizarron=", "--salida=")):
+            out.append(a)
+    return out
+
+
+def completar(rutas: list[str]) -> list[Path]:
+    """Draws every ![[lamina-*.svg]] a note names but does not have yet (notes written from a
+    cloud session carry only the commands). Returns the files it wrote."""
+    hechos: list[Path] = []
+    notas = [p for r in rutas for p in (sorted(Path(r).rglob("*.md")) if Path(r).is_dir() else [Path(r)])]
+    patron = re.compile(r"<!-- lamina (.+?) -->\n((?:!\[\[lamina-\w+\.svg\]\] ?)+)")
+    for nota in notas:
+        for m in patron.finditer(nota.read_text(encoding="utf-8")):
+            for cmd in m.group(1).split(" & "):
+                destino = nota.parent / nombre_en_nota(cmd)
+                if destino.exists():
+                    continue
+                argv = shlex.split(cmd)
+                a = parser().parse_args(_rangos_negativos(argv))
+                tema = TEMAS["claro" if a.claro else "oscuro"]
+                svg = tarjeta(_dibujar(a), tema, getattr(a, "titulo", None))
+                destino.write_text(svg, encoding="utf-8")
+                hechos.append(destino)
+    return hechos
+
+
+def nombre_en_nota(cmd: str) -> str:
+    """The SVG's name in the vault depends only on the command, so `completar` can rebuild it."""
+    return f"lamina-{hashlib.sha256(cmd.encode()).hexdigest()[:12]}.svg"
+
+
+def _svg_al_lado(nota: Path, svg: str, cmd: str) -> str:
     nota.parent.mkdir(parents=True, exist_ok=True)
-    archivo = f"lamina-{nombre}.svg"
+    archivo = nombre_en_nota(cmd)
     (nota.parent / archivo).write_text(svg, encoding="utf-8")
     return archivo
 
@@ -178,6 +220,10 @@ def _svg_al_lado(nota: Path, svg: str, nombre: str) -> str:
 def main(argv: list[str] | None = None) -> int:
     argv = _rangos_negativos(sys.argv[1:] if argv is None else argv)
     args = parser().parse_args(argv)
+    if args.tipo == "completar":
+        for f in completar(args.rutas):
+            print(f)
+        return 0
     claro = args.claro
     tema = TEMAS["claro" if claro else "oscuro"]
     nota = Path(args.pizarron) if args.pizarron else None
@@ -194,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
             svg_txt, sueltos = dibujar_hoja(fuente, claro)
             png, svg = guardar(svg_txt, nombre, args.salida)
             if nota:
-                archivos = iter([_svg_al_lado(nota, s, clave(cmd, claro)) for cmd, s in sueltos])
+                archivos = iter([_svg_al_lado(nota, s, cmd) for cmd, s in sueltos])
                 comandos = iter([cmd for cmd, _ in sueltos])
                 embeds, cmds = [], []
                 for ln in fuente.split("\n"):
@@ -212,8 +258,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.tipo == "formula":
                 md = hoja.a_markdown(_formula_a_hoja(args), [], [])
             else:
-                archivo = _svg_al_lado(nota, svg.read_text(encoding="utf-8"), nombre.split("-", 1)[1])
-                cmd = shlex.join(a for a in argv if a != "--pizarron" and a != args.pizarron)
+                cmd = shlex.join(_sin_salida(argv))
+                archivo = _svg_al_lado(nota, svg.read_text(encoding="utf-8"), cmd)
                 md = f"<!-- lamina {cmd} -->\n![[{archivo}]]\n"
             if args.titulo:
                 md = f"## {args.titulo}\n\n" + md

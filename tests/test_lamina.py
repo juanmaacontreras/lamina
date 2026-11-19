@@ -130,3 +130,23 @@ def test_dos_recuadros_seguidos_no_se_mezclan():
     cajas = [b for b in hoja.leer(fuente) if b.tipo == "caja"]
     assert [(c.extra, c.lineas) for c in cajas] == [("warning", ["a"]), ("tip", ["b"])]
     assert "> a\n\n> [!tip]" in hoja.a_markdown(fuente, [], [])
+
+
+def test_completar_redibuja_lo_que_falta(tmp_path, capsys):
+    """A note written from a cloud session carries only the commands: the PC draws the rest,
+    byte for byte the same as if it had been drawn there."""
+    nota = tmp_path / "pz" / "Pizarrón — nube.md"
+    correr(["bode", "--num", "1", "--den", "1 1", "--titulo", "Paso 1", "--pizarron", str(nota)], capsys)
+    fuente = tmp_path / "h.md"
+    fuente.write_text("@polos --polos '±j' & @escalera 'L=1 | C=1'\n", encoding="utf-8")
+    correr(["hoja", str(fuente), "--claro", "--pizarron", str(nota)], capsys)
+    svgs = sorted(nota.parent.glob("lamina-*.svg"))
+    originales = {p.name: p.read_text(encoding="utf-8") for p in svgs}
+    assert len(originales) == 3
+    for p in svgs:
+        p.unlink()
+    assert cli.main(["completar", str(tmp_path / "pz")]) == 0
+    assert {p.name: p.read_text(encoding="utf-8") for p in nota.parent.glob("lamina-*.svg")} == originales
+    capsys.readouterr()
+    assert cli.main(["completar", str(nota)]) == 0
+    assert capsys.readouterr().out == ""  # nothing left to draw

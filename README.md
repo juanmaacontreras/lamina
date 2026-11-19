@@ -31,6 +31,7 @@ next to it). Decimals take a dot; labels come out with a comma.
 | `escalera` | `lamina escalera 'Rg=1 \| L1=1 \| C2=2 \| tanque(L3=1,C3=1/2) \| RL=1'` |
 | `bloques` | `lamina bloques --b '1 0 -1' --a '1 -0.5 0.25'` (direct form II; without `--a`, FIR) |
 | `hoja` | a whole sheet from a file or stdin, below |
+| `completar` | `lamina completar "$VAULT/UTN"`: draws the SVGs a note names but lacks (notes written from a cloud session carry only the commands; an SVG's name depends only on its command) |
 
 **Ladder text.** Elements separated by `|`, alternating series/shunt from `--empieza s|p`
 (default series). `s:` or `p:` in front forces the position (all-parallel Foster:
